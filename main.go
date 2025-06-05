@@ -19,7 +19,6 @@ import (
 // Config holds all configuration for the application
 type Config struct {
 	GithubToken  string
-	Repository   string
 	Owner        string
 	Repo         string
 	PRNumber     int
@@ -112,16 +111,17 @@ Focus on:
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			slog.Default().Info("starting application")
+
 			config := &Config{
 				GithubToken:  cmd.String("github-token"),
-				Repository:   cmd.String("github-repository"),
 				PRNumber:     cmd.Int("github-pr-number"),
 				BellmanKey:   cmd.String("bellman-key"),
 				BellmanURL:   cmd.String("bellman-url"),
 				SystemPrompt: cmd.String("system-prompt") + "\n" + cmd.String("system-prompt-addition"),
 			}
 			var found bool
-			config.Owner, config.Repo, found = strings.Cut(cmd.String("repository"), "/")
+			config.Owner, config.Repo, found = strings.Cut(cmd.String("github-repository"), "/")
 
 			if !found {
 				return fmt.Errorf("invalid repository format: %s", cmd.String("repository"))
@@ -136,16 +136,24 @@ Focus on:
 				Name:     model,
 			}
 
+			slog.Default().Info("loaded config")
+
 			return runReview(config)
 		},
 	}
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		slog.Default().Error("got error running blot", "err", err)
+		slog.Default().Error("got error running pre", "err", err)
+		os.Exit(1)
 	}
 }
 
 func runReview(config *Config) error {
+	slog.Default().Info("starting PR review",
+		"owner", config.Owner,
+		"repo", config.Repo,
+		"pr", config.PRNumber,
+		"model", fmt.Sprintf("%s/%s", config.BellmanModel.Provider, config.BellmanModel.Name))
 
 	// Initialize GitHub client
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.GithubToken})
@@ -164,64 +172,90 @@ func runReview(config *Config) error {
 }
 
 func (pr *PRReviewer) ReviewPR(ctx context.Context) error {
+	slog.Default().Info("reviewing pull request", "pr", pr.config.PRNumber)
+
 	// Get PR details
 	pull, _, err := pr.gh.PullRequests.Get(ctx, pr.config.Owner, pr.config.Repo, pr.config.PRNumber)
 	if err != nil {
+		slog.Default().Error("failed to get PR details", "err", err)
 		return fmt.Errorf("failed to get PR: %w", err)
 	}
+	slog.Default().Info("retrieved PR details", "title", pull.GetTitle(), "author", pull.GetUser().GetLogin())
 
 	// Get PR diff
 	diff, err := pr.getPRDiff(ctx)
 	if err != nil {
+		slog.Default().Error("failed to get PR diff", "err", err)
 		return fmt.Errorf("failed to get PR diff: %w", err)
 	}
+	slog.Default().Info("retrieved PR diff", "diff_size", len(diff))
 
 	// Get changed files
 	files, err := pr.getChangedFiles(ctx)
 	if err != nil {
+		slog.Default().Error("failed to get changed files", "err", err)
 		return fmt.Errorf("failed to get changed files: %w", err)
 	}
+	slog.Default().Info("retrieved changed files", "count", len(files))
 
 	// Review with LLM
+	slog.Default().Info("starting LLM review")
 	review, err := pr.reviewWithLLM(ctx, pull, diff, files)
 	if err != nil {
+		slog.Default().Error("failed to review with LLM", "err", err)
 		return fmt.Errorf("failed to review with LLM: %w", err)
 	}
+	slog.Default().Info("completed LLM review", "score", review.Score, "issues_count", len(review.Issues))
 
 	// Post review comment
+	slog.Default().Info("posting review summary comment")
 	if err := pr.postReviewComment(ctx, review); err != nil {
+		slog.Default().Error("failed to post review comment", "err", err)
 		return fmt.Errorf("failed to post review comment: %w", err)
 	}
+	slog.Default().Info("posted review summary comment")
 
 	// Post inline comments for specific issues
-	if err := pr.postInlineComments(ctx, review.Issues); err != nil {
-		return fmt.Errorf("failed to post inline comments: %w", err)
+	if len(review.Issues) > 0 {
+		slog.Default().Info("posting inline comments", "count", len(review.Issues))
+		if err := pr.postInlineComments(ctx, review.Issues); err != nil {
+			slog.Default().Error("failed to post inline comments", "err", err)
+			return fmt.Errorf("failed to post inline comments: %w", err)
+		}
+		slog.Default().Info("posted all inline comments")
+	} else {
+		slog.Default().Info("no issues to post as inline comments")
 	}
 
+	slog.Default().Info("PR review completed successfully", "pr", pr.config.PRNumber)
 	return nil
 }
 
 func (pr *PRReviewer) getPRDiff(ctx context.Context) (string, error) {
+	slog.Default().Info("fetching PR diff")
 	// Get the raw diff
 	diff, _, err := pr.gh.PullRequests.GetRaw(ctx, pr.config.Owner, pr.config.Repo, pr.config.PRNumber, github.RawOptions{
 		Type: github.Diff,
 	})
 	if err != nil {
+		slog.Default().Error("failed to get PR diff", "err", err)
 		return "", err
 	}
 	return diff, nil
 }
 
 func (pr *PRReviewer) getChangedFiles(ctx context.Context) ([]*github.CommitFile, error) {
+	slog.Default().Info("fetching changed files")
 	files, _, err := pr.gh.PullRequests.ListFiles(ctx, pr.config.Owner, pr.config.Repo, pr.config.PRNumber, nil)
 	if err != nil {
+		slog.Default().Error("failed to get changed files", "err", err)
 		return nil, err
 	}
 	return files, nil
 }
 
 func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullRequest, diff string, files []*github.CommitFile) (*Results, error) {
-
+	slog.Default().Info("building review prompt")
 	ress, err := pr.llm.Generator().
 		Model(pr.config.BellmanModel).
 		System(pr.config.SystemPrompt).
@@ -229,12 +263,14 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 		Prompt(pr.buildReviewPrompt(pull, diff, files))
 
 	if err != nil {
+		slog.Default().Error("failed to generate review", "err", err)
 		return nil, fmt.Errorf("failed to generate review: %w", err)
 	}
 
 	var result Results
 	err = ress.Unmarshal(&result)
 	if err != nil {
+		slog.Default().Error("failed to unmarshal review result", "err", err)
 		return nil, fmt.Errorf("failed to unmarshal review result: %w", err)
 	}
 
@@ -264,7 +300,7 @@ func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, f
 }
 
 func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) error {
-
+	slog.Default().Info("formatting review comment")
 	var comment strings.Builder
 
 	// Add header with score
@@ -303,9 +339,11 @@ func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) er
 }
 
 func (pr *PRReviewer) postInlineComments(ctx context.Context, issues []Issue) error {
+	slog.Default().Info("preparing inline comments", "issues_count", len(issues))
 	// Get the PR to get the commit SHA
 	pull, _, err := pr.gh.PullRequests.Get(ctx, pr.config.Owner, pr.config.Repo, pr.config.PRNumber)
 	if err != nil {
+		slog.Default().Error("failed to get PR", "err", err)
 		return err
 	}
 
