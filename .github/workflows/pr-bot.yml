@@ -5,7 +5,7 @@ on:
       - created
 
 jobs:
-  pre-llm-review:
+  pr-bot-on-demand:
     # Only run on pull request comments that start with '/bellman'
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/bellman')
     runs-on: ubuntu-latest

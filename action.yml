@@ -38,7 +38,7 @@ runs:
         BELLMAN_URL: ${{ inputs.bellman-url }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_PR_NUMBER: ${{ github.event_name == 'pull_request' ? github.event.pull_request.number : github.event.comment.pull_request.number }}
         SYSTEM_PROMPT: ${{ inputs.system-prompt }}
         SYSTEM_PROMPT_ADDITION: ${{ inputs.system-prompt-addition }}
       run: |
