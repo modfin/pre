@@ -43,6 +43,8 @@ type Results struct {
 	Issues      []Issue  `json:"issues"`
 	Suggestions []string `json:"suggestions" json-description:"please provide suggestions for the pull request. Keep it to 0-3 bullet points with 1-3 sentences each."`
 	Score       int      `json:"score" json-minimum:"1" json-maximum:"10" json-description:"please provide a score on the PR between 1 and 10. How good the PR is, where 0 is the worst and 10 is the best"`
+
+	metadata models.Metadata `json:"-"`
 }
 
 type Issue struct {
@@ -322,6 +324,7 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 		return nil, fmt.Errorf("failed to unmarshal review result: %w", err)
 	}
 
+	result.metadata = ress.Metadata
 	return &result, nil
 }
 
@@ -346,16 +349,16 @@ func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, f
 	return sb.String()
 }
 
-func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results, metadata models.Metadata) error {
+func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) error {
 	slog.Default().Info("formatting review comment")
 	var comment strings.Builder
 
 	// Add header with score
 	comment.WriteString(fmt.Sprintf("# PR Review (Score: %d/10)\n\n", review.Score))
 
-	comment.WriteString(fmt.Sprintf("Model: %s \\\n", metadata.Model))
-	comment.WriteString(fmt.Sprintf("Input Tokens: %d \\\n", metadata.InputTokens))
-	comment.WriteString(fmt.Sprintf("Output Tokens: %d\n\n", metadata.OutputTokens))
+	comment.WriteString(fmt.Sprintf("Model: %s \\\n", review.metadata.Model))
+	comment.WriteString(fmt.Sprintf("Input Tokens: %d \\\n", review.metadata.InputTokens))
+	comment.WriteString(fmt.Sprintf("Output Tokens: %d\n\n", review.metadata.OutputTokens))
 
 	// Add summary
 	comment.WriteString("## Summary\n\n")
