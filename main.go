@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/google/go-github/v56/github"
@@ -134,6 +135,12 @@ Focus on:
 			config.BellmanModel = gen.Model{
 				Provider: provider,
 				Name:     model,
+			}
+
+			cc := exec.Command("bash", "-c", config.Repository)
+			err := cc.Run()
+			if err != nil {
+				return err
 			}
 
 			return runReview(config)
