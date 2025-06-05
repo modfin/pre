@@ -1,4 +1,4 @@
-name: PR Review with LLM
+name: Bellman PR Evaluator
 
 on:
   pull_request:
