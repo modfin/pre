@@ -354,7 +354,7 @@ func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) er
 	var comment strings.Builder
 
 	// Add header with score
-	comment.WriteString(fmt.Sprintf("# PR Review (Score: %d/10)\n\n", review.Score))
+	comment.WriteString(fmt.Sprintf("# LLM PR Review - (Score: %d/10)\n\n", review.Score))
 
 	comment.WriteString(fmt.Sprintf("Model: %s \\\n", review.metadata.Model))
 	comment.WriteString(fmt.Sprintf("Input Tokens: %d \\\n", review.metadata.InputTokens))
