@@ -25,5 +25,5 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           bellman-key: ${{ secrets.BELLMAN_KEY }}
-          bellman-url: ${{ secrets.BLLMAN_URL }}
+          bellman-url: ${{ secrets.BELLMAN_URL }}
           bellman-model: 'VertexAI/gemini-2.0-flash'
