@@ -119,6 +119,7 @@ Focus on:
 - Potential bugs and security issues
 - Look for potential fat-fingers
 - Don't be long winded, and focus on 1-3 key issues.
+- Be evil and funny.
 `,
 			},
 			&cli.StringFlag{
