@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-github/v56/github"
 	"github.com/modfin/bellman"
 	"github.com/modfin/bellman/models/gen"
-	"github.com/modfin/bellman/prompt"
 	"github.com/modfin/bellman/schema"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/oauth2"
@@ -18,14 +17,16 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	GithubToken  string
-	Owner        string
-	Repo         string
-	PRNumber     int
-	BellmanKey   string
-	BellmanModel gen.Model
-	BellmanURL   string
-	SystemPrompt string
+	GithubToken            string
+	Owner                  string
+	Repo                   string
+	PRNumber               int
+	BellmanKey             string
+	BellmanModel           gen.Model
+	BellmanURL             string
+	SystemPrompt           string
+	BellmanMaxInputTokens  int
+	BellmanMaxOutputTokens int
 }
 
 type PRReviewer struct {
@@ -92,6 +93,18 @@ func main() {
 				Sources:  cli.EnvVars("BELLMAN_URL"),
 				Required: true,
 			},
+			&cli.IntFlag{
+				Name:    "bellman-max-input-tokens",
+				Usage:   "The approximate maximum number of tokens to send to the LLM, if the pr is more, the bot refuse to eval the pr",
+				Value:   10_000,
+				Sources: cli.EnvVars("BELLMAN_MAX_INPUT_TOKENS"),
+			},
+			&cli.IntFlag{
+				Name:    "bellman-max-output-tokens",
+				Usage:   "The maximum number of tokens to receive from the LLM, if the pr is more, the bot refuse to eval the pr",
+				Value:   5_000,
+				Sources: cli.EnvVars("BELLMAN_MAX_OUTPUT_TOKENS"),
+			},
 			&cli.StringFlag{
 				Name:    "system-prompt",
 				Usage:   "Bellman system prompt to be used for PR review",
@@ -114,11 +127,13 @@ Focus on:
 			slog.Default().Info("starting application")
 
 			config := &Config{
-				GithubToken:  cmd.String("github-token"),
-				PRNumber:     cmd.Int("github-pr-number"),
-				BellmanKey:   cmd.String("bellman-key"),
-				BellmanURL:   cmd.String("bellman-url"),
-				SystemPrompt: cmd.String("system-prompt") + "\n" + cmd.String("system-prompt-addition"),
+				GithubToken:            cmd.String("github-token"),
+				PRNumber:               cmd.Int("github-pr-number"),
+				BellmanKey:             cmd.String("bellman-key"),
+				BellmanURL:             cmd.String("bellman-url"),
+				BellmanMaxInputTokens:  cmd.Int("bellman-max-input-tokens"),
+				BellmanMaxOutputTokens: cmd.Int("bellman-max-output-tokens"),
+				SystemPrompt:           cmd.String("system-prompt") + "\n" + cmd.String("system-prompt-addition"),
 			}
 			var found bool
 			config.Owner, config.Repo, found = strings.Cut(cmd.String("github-repository"), "/")
@@ -260,11 +275,20 @@ func (pr *PRReviewer) getChangedFiles(ctx context.Context) ([]*github.CommitFile
 
 func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullRequest, diff string, files []*github.CommitFile) (*Results, error) {
 	slog.Default().Info("building review prompt")
+
+	content := pr.buildReviewPrompt(pull, diff, files)
+	slog.Default().Info("built review prompt", "length", len(content))
+
+	if len(content) > pr.config.BellmanMaxInputTokens*4 {
+		slog.Default().Error("review prompt too long", "length", len(content), "max", pr.config.BellmanMaxInputTokens*4)
+		return nil, fmt.Errorf("review prompt many tokens: %d > %d", len(content)/4, pr.config.BellmanMaxInputTokens)
+	}
+
 	ress, err := pr.llm.Generator().
 		Model(pr.config.BellmanModel).
 		System(pr.config.SystemPrompt).
 		Output(schema.From(Results{})).
-		Prompt(pr.buildReviewPrompt(pull, diff, files))
+		Prompt()
 
 	if err != nil {
 		slog.Default().Error("failed to generate review",
@@ -273,6 +297,12 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 			"url", pr.config.BellmanURL)
 		return nil, fmt.Errorf("failed to generate review: %w", err)
 	}
+
+	slog.Default().Info("llm review completed",
+		"model", ress.Metadata.Model,
+		"input_tokens", ress.Metadata.InputTokens,
+		"output_tokens", ress.Metadata.OutputTokens,
+	)
 
 	var result Results
 	err = ress.Unmarshal(&result)
@@ -284,7 +314,7 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 	return &result, nil
 }
 
-func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, files []*github.CommitFile) prompt.Prompt {
+func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, files []*github.CommitFile) string {
 	var sb strings.Builder
 
 	sb.WriteString("Please review this pull request:\n\n")
@@ -302,7 +332,7 @@ func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, f
 
 	slog.Default().Info("built review prompt", "prompt", sb.String())
 
-	return prompt.AsUser(sb.String())
+	return sb.String()
 }
 
 func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) error {
@@ -359,6 +389,8 @@ func (pr *PRReviewer) postInlineComments(ctx context.Context, issues []Issue) er
 		if issue.File != "" && issue.Line > 0 {
 			body := fmt.Sprintf("**%s Issue (%s)**\n\n%s",
 				strings.Title(issue.Type), issue.Severity, issue.Description)
+
+			issue.Line += 1 // Offset for line numbers
 
 			comment := &github.DraftReviewComment{
 				Path: &issue.File,
