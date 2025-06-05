@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/modfin/bellman/models"
+	"github.com/modfin/bellman/prompt"
 	"log/slog"
 	"os"
 	"strings"
@@ -301,7 +302,7 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 		System(pr.config.SystemPrompt).
 		MaxTokens(pr.config.BellmanMaxOutputTokens).
 		Output(schema.From(Results{})).
-		Prompt()
+		Prompt(prompt.AsUser(content))
 
 	if err != nil {
 		slog.Default().Error("failed to generate review",
