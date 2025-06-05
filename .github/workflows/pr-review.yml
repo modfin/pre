@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Review PR with LLM
-        uses: modfin/pre
+        uses: modfin/pre@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           bellman-key: ${{ secrets.BELLMAN_KEY }}
