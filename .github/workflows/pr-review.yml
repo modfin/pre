@@ -1,0 +1,29 @@
+name: PR Review with LLM
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types:
+      - created
+
+jobs:
+  pre-llm-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Review PR with LLM
+        uses: modfin/pre
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          bellman-key: ${{ secrets.BELLMAN_KEY }}
+          bellman-url: ${{ secrets.BLLMAN_URL }}
+          bellman-model: 'VertexAI/gemini-2.0-flash'

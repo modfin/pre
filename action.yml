@@ -1,0 +1,47 @@
+name: 'PRE LLM PR Reviewer'
+description: 'Automatically review pull requests using LLM through bellman library'
+author: 'Modular Finance'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+    default: ${{ github.token }}
+  bellman-key:
+    description: 'API key for LLM service'
+    required: true
+  bellman-url:
+    description: 'url to bellman service'
+    required: true
+  bellman-model:
+    description: 'LLM model to use for review'
+    required: false
+    default: 'VertexAI/gemini-2.0-flash'
+
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Build and run reviewer
+      shell: bash
+      env:
+        BELLMAN_KEY: ${{ inputs.bellman-key }}
+        BELLMAN_MODEL: ${{ inputs.bellman-model }}
+        BELLMAN_URL: ${{ inputs.bellman-url }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        cd ${{ github.action_path }}
+        go mod tidy
+        go build -o pre main.go
+        ./pre
+
+branding:
+  icon: 'eye'
+  color: 'blue'
