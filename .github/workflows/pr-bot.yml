@@ -1,22 +1,23 @@
 name: Bellman PR Bot
-
 on:
-  pull_request_review_comment:
+  issue_comment:
     types:
       - created
 
 jobs:
   pre-llm-review:
-    if: startsWith(github.event.comment.body, '/bellman')
+    # Only run on pull request comments that start with '/bellman'
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/bellman')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          # Checkout the PR branch, not the base branch
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Review PR with LLM
