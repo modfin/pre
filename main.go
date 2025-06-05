@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/modfin/bellman/models"
 	"log/slog"
 	"os"
 	"strings"
@@ -280,13 +282,22 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 	slog.Default().Info("built review prompt", "length", len(content))
 
 	if len(content) > pr.config.BellmanMaxInputTokens*4 {
+
+		rev := "# LLM PR Review - too long\n\n" +
+			"Review failed to to length of input, ~" + fmt.Sprintf("%d tokens", len(content)/4) + "\\\n" +
+			"Maximum input length is ~" + fmt.Sprintf("%d tokens", pr.config.BellmanMaxInputTokens) + "\n\n"
+		_, _, err := pr.gh.Issues.CreateComment(ctx, pr.config.Owner, pr.config.Repo, pr.config.PRNumber, &github.IssueComment{
+			Body: &rev,
+		})
+
 		slog.Default().Error("review prompt too long", "length", len(content), "max", pr.config.BellmanMaxInputTokens*4)
-		return nil, fmt.Errorf("review prompt many tokens: %d > %d", len(content)/4, pr.config.BellmanMaxInputTokens)
+		return nil, errors.Join(fmt.Errorf("review prompt many tokens: %d > %d", len(content)/4, pr.config.BellmanMaxInputTokens), err)
 	}
 
 	ress, err := pr.llm.Generator().
 		Model(pr.config.BellmanModel).
 		System(pr.config.SystemPrompt).
+		MaxTokens(pr.config.BellmanMaxOutputTokens).
 		Output(schema.From(Results{})).
 		Prompt()
 
@@ -335,12 +346,16 @@ func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, f
 	return sb.String()
 }
 
-func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results) error {
+func (pr *PRReviewer) postReviewComment(ctx context.Context, review *Results, metadata models.Metadata) error {
 	slog.Default().Info("formatting review comment")
 	var comment strings.Builder
 
 	// Add header with score
 	comment.WriteString(fmt.Sprintf("# PR Review (Score: %d/10)\n\n", review.Score))
+
+	comment.WriteString(fmt.Sprintf("Model: %s \\\n", metadata.Model))
+	comment.WriteString(fmt.Sprintf("Input Tokens: %d \\\n", metadata.InputTokens))
+	comment.WriteString(fmt.Sprintf("Output Tokens: %d\n\n", metadata.OutputTokens))
 
 	// Add summary
 	comment.WriteString("## Summary\n\n")
