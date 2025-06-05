@@ -30,6 +30,19 @@ runs:
       with:
         go-version: '1.24'
 
+    - name: Get PR Number
+      shell: bash
+      id: get-pr-number
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" == "issue_comment" ]; then
+          echo "pr_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+        else
+          echo "Unsupported event type: ${{ github.event_name }}"
+          exit 1
+        fi
+
     - name: Build and run reviewer
       shell: bash
       env:
@@ -38,7 +51,7 @@ runs:
         BELLMAN_URL: ${{ inputs.bellman-url }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_PR_NUMBER: ${{ github.event_name == 'pull_request' ? github.event.pull_request.number : github.event.comment.pull_request.number }}
+        GITHUB_PR_NUMBER: ${{ steps.get-pr-number.outputs.pr_number }}
         SYSTEM_PROMPT: ${{ inputs.system-prompt }}
         SYSTEM_PROMPT_ADDITION: ${{ inputs.system-prompt-addition }}
       run: |
