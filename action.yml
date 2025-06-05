@@ -17,7 +17,10 @@ inputs:
     description: 'LLM model to use for review'
     required: false
     default: 'VertexAI/gemini-2.0-flash'
-
+  system-prompt-addition:
+    description: 'Additional context to add to system prompt'
+  system-prompt:
+    description: 'System prompt to use for review'
 
 runs:
   using: 'composite'
