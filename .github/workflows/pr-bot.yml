@@ -1,4 +1,4 @@
-name: Bellman PR Evaluator
+name: Bellman PR Bot
 
 on:
   pull_request_review_comment:
