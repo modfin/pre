@@ -32,6 +32,14 @@ type Config struct {
 	BellmanMaxOutputTokens int
 }
 
+const DefaultSystemPrompt = `You are an expert code reviewer. 
+Analyze the provided pull request and provide detailed, constructive feedback.
+Focus on:
+- Potential bugs and security issues
+- Look for potential fat-fingers
+- Don't be long winded, and focus on 1-3 key issues.
+`
+
 type PRReviewer struct {
 	config *Config
 
@@ -114,13 +122,7 @@ func main() {
 				Name:    "system-prompt",
 				Usage:   "Bellman system prompt to be used for PR review",
 				Sources: cli.EnvVars("SYSTEM_PROMPT"),
-				Value: `You are an expert code reviewer. 
-Analyze the provided pull request and provide detailed, constructive feedback.
-Focus on:
-- Potential bugs and security issues
-- Look for potential fat-fingers
-- Don't be long winded, and focus on 1-3 key issues.
-`,
+				Value:   DefaultSystemPrompt,
 			},
 			&cli.StringFlag{
 				Name:    "system-prompt-addition",
@@ -138,7 +140,7 @@ Focus on:
 				BellmanURL:             cmd.String("bellman-url"),
 				BellmanMaxInputTokens:  cmd.Int("bellman-max-input-tokens"),
 				BellmanMaxOutputTokens: cmd.Int("bellman-max-output-tokens"),
-				SystemPrompt:           cmd.String("system-prompt") + "\n" + cmd.String("system-prompt-addition"),
+				SystemPrompt:           cmd.String("system-prompt"),
 			}
 			var found bool
 			config.Owner, config.Repo, found = strings.Cut(cmd.String("github-repository"), "/")
@@ -155,6 +157,11 @@ Focus on:
 				Provider: provider,
 				Name:     model,
 			}
+
+			if len(strings.TrimSpace(config.SystemPrompt)) == 0 {
+				config.SystemPrompt = DefaultSystemPrompt
+			}
+			config.SystemPrompt = strings.TrimSpace(config.SystemPrompt + "\n" + cmd.String("system-prompt-addition"))
 
 			slog.Default().Info("loaded config")
 

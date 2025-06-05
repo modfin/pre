@@ -2,10 +2,7 @@ name: Bellman PR Evaluator
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-  pull_request_review_comment:
-    types:
-      - created
+    types: [opened]
 
 jobs:
   pre-llm-review:
@@ -27,3 +24,7 @@ jobs:
           bellman-key: ${{ secrets.BELLMAN_KEY }}
           bellman-url: ${{ secrets.BELLMAN_URL }}
           bellman-model: 'VertexAI/gemini-2.0-flash'
+#          system-prompt-addition:
+#          system-prompt: |-
+#            You are a software developer who is reviewing a pull request.
+#            You will be given the title, body, and changed files of the pull request.
