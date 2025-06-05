@@ -155,6 +155,10 @@ func runReview(config *Config) error {
 		"pr", config.PRNumber,
 		"model", fmt.Sprintf("%s/%s", config.BellmanModel.Provider, config.BellmanModel.Name))
 
+	if config.BellmanURL == "" {
+		return fmt.Errorf("BELLMAN_URL is required")
+	}
+
 	// Initialize GitHub client
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.GithubToken})
 	tc := oauth2.NewClient(context.Background(), ts)
@@ -263,7 +267,10 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 		Prompt(pr.buildReviewPrompt(pull, diff, files))
 
 	if err != nil {
-		slog.Default().Error("failed to generate review", "err", err)
+		slog.Default().Error("failed to generate review",
+			"err", err,
+			"model", pr.config.BellmanModel,
+			"url", pr.config.BellmanURL)
 		return nil, fmt.Errorf("failed to generate review: %w", err)
 	}
 
@@ -293,8 +300,7 @@ func (pr *PRReviewer) buildReviewPrompt(pull *github.PullRequest, diff string, f
 	sb.WriteString(diff)
 	sb.WriteString("\n```")
 
-	fmt.Println("REVIEW PROMPT:")
-	fmt.Println(sb.String())
+	slog.Default().Info("built review prompt", "prompt", sb.String())
 
 	return prompt.AsUser(sb.String())
 }
