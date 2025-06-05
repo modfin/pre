@@ -304,6 +304,8 @@ func (pr *PRReviewer) reviewWithLLM(ctx context.Context, pull *github.PullReques
 		return nil, errors.Join(fmt.Errorf("review prompt many tokens: %d > %d", len(content)/4, pr.config.BellmanMaxInputTokens), err)
 	}
 
+	slog.Default().Info("system prompt", "prompt", pr.config.SystemPrompt)
+
 	ress, err := pr.llm.Generator().
 		Model(pr.config.BellmanModel).
 		System(pr.config.SystemPrompt).

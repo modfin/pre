@@ -1,11 +1,13 @@
 name: Bellman PR Evaluator
 
 on:
-  pull_request:
-    types: [opened]
+  pull_request_review_comment:
+    types:
+      - created
 
 jobs:
   pre-llm-review:
+    if: startsWith(github.event.comment.body, '/bellman')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,11 +26,4 @@ jobs:
           bellman-key: ${{ secrets.BELLMAN_KEY }}
           bellman-url: ${{ secrets.BELLMAN_URL }}
           bellman-model: 'VertexAI/gemini-2.0-flash'
-#          system-prompt-addition:
-#          system-prompt: |-
-#            You are a software developer who is reviewing a pull request.
-#            You will be given the title, body, and changed files of the pull request.
-
-
-
-
+          system-prompt-addition: ${{ github.event.comment.body }}
