@@ -180,7 +180,7 @@ func main() {
 			&cli.IntFlag{
 				Name:    "bellman-max-input-tokens",
 				Usage:   "The approximate maximum number of tokens to send to the LLM, if the pr is more, the bot refuse to eval the pr",
-				Value:   10_000,
+				Value:   100_000,
 				Sources: cli.EnvVars("BELLMAN_MAX_INPUT_TOKENS"),
 			},
 			&cli.IntFlag{
