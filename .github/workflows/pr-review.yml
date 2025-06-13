@@ -24,10 +24,9 @@ jobs:
           bellman-key: ${{ secrets.BELLMAN_KEY }}
           bellman-url: ${{ secrets.BELLMAN_URL }}
           bellman-model: 'VertexAI/gemini-2.0-flash'
-#          system-prompt-addition:
 #          system-prompt: |-
 #            You are a software developer who is reviewing a pull request.
-#            You will be given the title, body, and changed files of the pull request.
+#            Highlight any potential bugs, but dont overdo it and respont with LGTM if there are no major issues.
 
 
 
