@@ -172,6 +172,11 @@ func main() {
 				Required: true,
 			},
 			&cli.StringFlag{
+				Name:    "bellman-model-override",
+				Usage:   "Override Bellman model to use (provider/model)",
+				Sources: cli.EnvVars("BELLMAN_MODEL_OVERRIDE"),
+			},
+			&cli.StringFlag{
 				Name:     "bellman-url",
 				Usage:    "Bellman API URL",
 				Sources:  cli.EnvVars("BELLMAN_URL"),
@@ -227,6 +232,14 @@ func main() {
 			config.BellmanModel = gen.Model{
 				Provider: provider,
 				Name:     model,
+			}
+
+			if provider, model, found = strings.Cut(cmd.String("bellman-model-override"), "/"); found {
+				slog.Default().Info("applying model override", "provider", provider, "model", model)
+				config.BellmanModel = gen.Model{
+					Provider: provider,
+					Name:     model,
+				}
 			}
 
 			if len(strings.TrimSpace(config.SystemPrompt)) == 0 {
