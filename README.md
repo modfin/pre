@@ -78,6 +78,22 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      - name: Extract params
+        id: params
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          if [ -z "$COMMENT_BODY" ]; then
+            exit 0 
+          fi
+          MODEL_OVERRIDE=$(printf '%s' "$COMMENT_BODY" | perl -ne '
+            if (/bellman\s+use\s+([a-zA-Z0-9._:\/-]+)/) {
+              print $1;
+              exit;
+            }
+          ')
+          echo "model_override=$MODEL_OVERRIDE" >> $GITHUB_OUTPUT
+
       - name: Review PR with LLM
         uses: modfin/pre@master
         with:
@@ -85,19 +101,21 @@ jobs:
           bellman-key: ${{ secrets.BELLMAN_KEY }}
           bellman-url: ${{ secrets.BELLMAN_URL }}
           bellman-model: 'VertexAI/gemini-2.0-flash'
+          bellman-model-override: ${{ steps.params.outputs.model_override }}
           system-prompt-addition: ${{ github.event.comment.body }}
 ```
 
 ## Configuration
 
-| Input | Description                         | Required | Default                     |
-|-------|-------------------------------------|----------|-----------------------------|
-| `github-token` | GitHub token for API access         | Yes | `${{ github.token }}`       |
-| `bellman-key` | API key for LLM service             | Yes | -                           |
-| `bellman-url` | URL to Bellman service              | Yes | -                           |
-| `bellman-model` | LLM model to use for review         | No | `VertexAI/gemini-2.0-flash` |
-| `system-prompt` | Sets a specific system prompt      | No | see `DefaultSystemPrompt`  |
-| `system-prompt-addition` | Additional instructions for the LLM | No | -                           |
+| Input                    | Description                          | Required | Default                     |
+|--------------------------|--------------------------------------|----------|-----------------------------|
+| `github-token`           | GitHub token for API access          | Yes | `${{ github.token }}`       |
+| `bellman-key`            | API key for LLM service              | Yes | -                           |
+| `bellman-url`            | URL to Bellman service               | Yes | -                           |
+| `bellman-model`          | LLM model to use for review          | No | `VertexAI/gemini-2.0-flash` |
+| `bellman-model-override` | Override LLM model to use for review | No | -                           |
+| `system-prompt`          | Sets a specific system prompt        | No | see `DefaultSystemPrompt`   |
+| `system-prompt-addition` | Additional instructions for the LLM  | No | -                           |
 
 ## Requirements
 
